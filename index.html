@@ -136,6 +136,7 @@
     let turmaAtual = "";
     let disciplinaAtual = "";
     let statusAtual = ""; 
+    let nomeProfessorLogado = ""; 
 
     function customConfirm(title, message, confirmText = "Confirmar", cancelText = "Cancelar", isAlert = false, confirmColorClass = "") {
       return new Promise((resolve) => {
@@ -247,6 +248,7 @@
       try {
         var res = await apiCall("login", { masp: masp });
         if (res.sucesso) {
+          nomeProfessorLogado = res.nome || "";
           document.getElementById('welcome-msg').innerText = "Olá, " + res.nome;
           window.history.pushState({ step: 'turmas' }, '');
           mostrarStepTurmas();
@@ -394,6 +396,16 @@
       return s;
     }
 
+    function getDataHoraAtualFormatada() {
+      var agora = new Date();
+      var dia = String(agora.getDate()).padStart(2, '0');
+      var mes = String(agora.getMonth() + 1).padStart(2, '0');
+      var ano = agora.getFullYear();
+      var hora = String(agora.getHours()).padStart(2, '0');
+      var min = String(agora.getMinutes()).padStart(2, '0');
+      return dia + '/' + mes + '/' + ano + ' às ' + hora + ':' + min;
+    }
+
     async function selecionarDisciplina(nomeDisciplina, status, autor, dataHora) {
       if (status === "Enviado") {
         const confirmar = await customConfirm(
@@ -525,22 +537,43 @@
 
       msgBox.innerText = "Salvando gabarito... Por favor, aguarde."; msgBox.style.color = "#3b82f6";
 
-      var res = await apiCall("salvar", { turma: turmaAtual, respostas: respostas });
-      if (res.sucesso) {
-        msgBox.innerText = "Gabarito salvo com sucesso!"; msgBox.style.color = "#10b981";
-        isSaved = true; 
-        statusAtual = "Enviado"; 
-        questoesAtuais.forEach(q => {
-          document.getElementById('q_' + q.row).disabled = true;
+      var dataHoraAtual = getDataHoraAtualFormatada();
+
+      try {
+        var res = await apiCall("salvar", { 
+          turma: turmaAtual, 
+          disciplina: disciplinaAtual,
+          respostas: respostas,
+          autor: nomeProfessorLogado || "Professor(a)",
+          dataHora: dataHoraAtual
         });
 
-        document.getElementById('btn-salvar').classList.add('hidden');
-        document.getElementById('btn-limpar').classList.add('hidden'); 
-        document.getElementById('btn-editar').classList.remove('hidden');
-        document.getElementById('btn-sair').classList.remove('hidden');
-        carregarDisciplinas(); 
-      } else {
-        msgBox.innerText = "Erro ao salvar: " + res.erro; msgBox.style.color = "#ef4444";
+        if (res && res.sucesso) {
+          msgBox.innerText = "Gabarito salvo com sucesso!"; msgBox.style.color = "#10b981";
+          isSaved = true; 
+          statusAtual = "Enviado"; 
+          questoesAtuais.forEach(q => {
+            document.getElementById('q_' + q.row).disabled = true;
+          });
+
+          var autorFinal = res.autor || nomeProfessorLogado || "Professor(a)";
+          var dataFinal = formatarDataHora(res.dataHora || dataHoraAtual);
+
+          var auditBox = document.getElementById('audit-info-box');
+          auditBox.classList.remove('hidden');
+          document.getElementById('audit-autor-label').innerText = 'Inserido por: ' + autorFinal;
+          document.getElementById('audit-data-label').innerText = 'Data/Hora do salvamento: ' + dataFinal;
+
+          document.getElementById('btn-salvar').classList.add('hidden');
+          document.getElementById('btn-limpar').classList.add('hidden'); 
+          document.getElementById('btn-editar').classList.remove('hidden');
+          document.getElementById('btn-sair').classList.remove('hidden');
+          carregarDisciplinas(); 
+        } else {
+          msgBox.innerText = "Erro ao salvar: " + (res && res.erro ? res.erro : "Falha na comunicação."); msgBox.style.color = "#ef4444";
+        }
+      } catch (err) {
+        msgBox.innerText = "Erro de conexão ao salvar: " + err.message; msgBox.style.color = "#ef4444";
       }
     }
 
